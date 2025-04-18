@@ -1,42 +1,81 @@
-name: Flutter
+name: Flutter Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  clone_repo:
+    runs-on: macOS
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set Up Java
-        uses: actions/setup-java@v3.12.0
+      - name: Setup Flutter
+        run: |
+          echo "${GITHUB_WORKSPACE}/_flutter/bin" >> ${GITHUB_PATH}
+
+      - name: Install
+        run: |
+          flutter config --enable-web
+          flutter pub get
+          
+  build_flutter_web:
+    needs: clone_repo
+    runs-on: macOS
+    steps:
+      - name: Build
+        run: |
+          flutter build web
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
         with:
-          distribution: 'oracle'
-          java-version: '17'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
 
-      - name: Set Up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.0'
-          channel: 'stable'
 
-      - name: Install Dependencies
-        run: flutter pub get
+  build_flutter_ios:
+    needs: clone_repo
+    runs-on: macOS
+    steps:
+      - name: Build
+        run: |
+          flutter build ios
 
-      - name: Code Style
-        run: dart format --set-exit-if-changed .
+  build_flutter_android:
+    needs: clone_repo
+    runs-on: macOS
+    steps:
+      - name: Build
+        run: |
+          flutter build apk --split-per-abi
 
-      - name: Lint
-        run: flutter analyze .
+  build_flutter_macos:
+    needs: clone_repo
+    runs-on: macOS
+    steps:
+      - name: Build
+        run: |
+          flutter build macos
 
-      - name: Unit tests
-        run: flutter test
-
-      - name: Build APK
-        run: flutter build apk --debug
+  build_flutter_linux:
+    needs: clone_repo
+    runs-on: macOS
+    steps:
+      - name: Build
+        run: |
+          flutter build linux
